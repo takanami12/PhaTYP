@@ -113,8 +113,10 @@ def parse_args():
         help="Learning rate",
     )
     parser.add_argument(
-        "--min_len", type=int, default=3000,
-        help="Minimum contig length (bp) to keep during preprocessing",
+        "--min_len", type=int, default=0,
+        help="Minimum contig length (bp) to keep during preprocessing "
+             "(default 0 = keep all). PhaTYP's original default is 3000, "
+             "but complete phage genomes are often shorter.",
     )
     parser.add_argument(
         "--threads", type=str, default="8",
@@ -176,6 +178,13 @@ def run_preprocessing(fasta_files, phatyp_dir, midfolder, min_len, threads):
     print(f"  Unique genomes passing length filter (>={min_len} bp): {len(all_records)}")
     if short_skipped:
         print(f"  Skipped {short_skipped} sequences shorter than {min_len} bp")
+
+    if len(all_records) == 0:
+        raise RuntimeError(
+            f"No sequences passed the length filter (min_len={min_len} bp). "
+            f"All {short_skipped} sequences were shorter than {min_len} bp.\n"
+            f"  -> Re-run with --min_len 0 to keep all sequences, or set a smaller value."
+        )
 
     # Write combined FASTA
     combined_fasta = os.path.join(midfolder, "combined_all.fasta")
