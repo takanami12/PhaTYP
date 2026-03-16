@@ -363,7 +363,6 @@ def finetune_fold(fold_name, fold_idx, group_name, train_df, val_df, args, token
 
     training_args = TrainingArguments(
         output_dir=os.path.join(fold_out, "checkpoints"),
-        overwrite_output_dir=True,
         do_train=True,
         do_eval=True,
         learning_rate=args.lr,
