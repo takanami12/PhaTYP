@@ -55,6 +55,7 @@ import pyarrow as pa
 import datasets
 from datasets import Dataset, DatasetDict
 
+import transformers
 from transformers import (
     BertTokenizer,
     AutoModelForSequenceClassification,
@@ -63,6 +64,11 @@ from transformers import (
     DataCollatorWithPadding,
 )
 from Bio import SeqIO
+
+# Suppress verbose progress bars from datasets and transformers
+datasets.disable_progress_bars()
+transformers.logging.set_verbosity_error()
+transformers.logging.disable_progress_bar()
 
 
 # ---------------------------------------------------------------------------
@@ -200,7 +206,10 @@ def run_preprocessing(fasta_files, phatyp_dir, midfolder, min_len, threads):
         "--threads", str(threads),
     ]
     print(f"  Running: {' '.join(cmd)}")
-    subprocess.run(cmd, check=True, cwd=phatyp_dir)
+    log_path = os.path.join(midfolder, "preprocessing.log")
+    with open(log_path, "w") as log_f:
+        subprocess.run(cmd, check=True, cwd=phatyp_dir, stdout=log_f, stderr=log_f)
+    print(f"  Preprocessing log saved to: {log_path}")
 
     return _load_features(midfolder)
 
@@ -356,7 +365,7 @@ def finetune_fold(fold_name, fold_idx, train_df, val_df, args, tokenizer):
         load_best_model_at_end=True,
         metric_for_best_model="overall_acc",
         greater_is_better=True,
-        logging_steps=50,
+        logging_strategy="epoch",
         report_to="none",          # set to "tensorboard" if you want TensorBoard
     )
 
