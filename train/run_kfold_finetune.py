@@ -150,8 +150,8 @@ def collect_fasta_files(data_dir: Path):
 
 
 def get_genome_ids(fasta_path: Path):
-    """Return list of sequence IDs from a FASTA file."""
-    return [r.id for r in SeqIO.parse(str(fasta_path), "fasta")]
+    """Return list of genome IDs from a FASTA file (first part of header split by '__')."""
+    return [r.id.split("__")[0] for r in SeqIO.parse(str(fasta_path), "fasta")]
 
 
 # ---------------------------------------------------------------------------
@@ -230,7 +230,7 @@ def _load_features(midfolder):
 
     genome2text = {}
     for idx, text in enumerate(feat_df["text"].values):
-        genome_id = id2contig[idx]
+        genome_id = id2contig[idx].split("__")[0]
         genome2text[genome_id] = text
 
     print(f"  Loaded features for {len(genome2text)} genomes")
