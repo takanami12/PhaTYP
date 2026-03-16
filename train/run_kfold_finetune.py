@@ -133,7 +133,10 @@ def parse_args():
         "--skip_preprocessing", action="store_true",
         help="Skip preprocessing step and load cached features from output_dir/preprocessing/",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    args.pretrained_model = str(Path(args.pretrained_model).resolve())
+    args.config_dir = str(Path(args.config_dir).resolve())
+    return args
 
 
 # ---------------------------------------------------------------------------
