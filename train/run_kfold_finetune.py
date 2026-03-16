@@ -5,7 +5,7 @@ K-Fold Fine-tuning for PhaTYP model.
 PIPELINE:
   1. Collect all unique genomes across all folds/groups
   2. Run preprocessing ONCE (Prodigal + DIAMOND) -> PC token features
-  3. For each fold: assemble train/val CSVs from all groups, fine-tune, evaluate
+  3. For each fold × group: fine-tune a separate model, evaluate
 
 EXPECTED DATA STRUCTURE:
   data_dir/
@@ -42,6 +42,7 @@ USAGE:
 """
 
 import os
+import re
 import sys
 import json
 import pickle
@@ -243,12 +244,15 @@ def _load_features(midfolder):
 
 def build_fold_dataframes(fold_dir: Path, label_map: dict, genome2text: dict):
     """
-    Build train and val DataFrames for one fold by merging all groups.
+    Build train and val DataFrames for each group in one fold separately.
+
+    Group name is extracted from the FASTA filename by removing the
+    trailing '_train' or '_val' suffix (e.g. 'groupA_train.fasta' -> 'groupA').
 
     Returns:
-        train_df, val_df  (columns: label, text)
+        dict mapping group_name -> (train_df, val_df)  (columns: label, text)
     """
-    train_records, val_records = [], []
+    groups = {}   # group_name -> {"train": [...], "val": [...]}
     missing_feat, missing_label = [], []
 
     fasta_files = []
@@ -265,6 +269,10 @@ def build_fold_dataframes(fold_dir: Path, label_map: dict, genome2text: dict):
             print(f"  [WARN] Cannot determine split for '{fasta_path.name}' — skipping")
             continue
 
+        group = re.sub(r'_(train|val)$', '', fasta_path.stem, flags=re.IGNORECASE)
+        if group not in groups:
+            groups[group] = {"train": [], "val": []}
+
         for genome_id in get_genome_ids(fasta_path):
             if genome_id not in genome2text:
                 missing_feat.append(genome_id)
@@ -273,17 +281,17 @@ def build_fold_dataframes(fold_dir: Path, label_map: dict, genome2text: dict):
                 missing_label.append(genome_id)
                 continue
             record = {"label": label_map[genome_id], "text": genome2text[genome_id]}
-            if split == "train":
-                train_records.append(record)
-            else:
-                val_records.append(record)
+            groups[group][split].append(record)
 
     if missing_feat:
         print(f"  [WARN] {len(missing_feat)} genomes skipped (no features — likely too short)")
     if missing_label:
         print(f"  [WARN] {len(missing_label)} genomes skipped (no label in label CSV)")
 
-    return pd.DataFrame(train_records), pd.DataFrame(val_records)
+    return {
+        group: (pd.DataFrame(splits["train"]), pd.DataFrame(splits["val"]))
+        for group, splits in groups.items()
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -315,13 +323,13 @@ def compute_metrics(eval_pred):
     }
 
 
-def finetune_fold(fold_name, fold_idx, train_df, val_df, args, tokenizer):
-    """Fine-tune model for one fold and return evaluation metrics."""
-    fold_out = os.path.join(args.output_dir, fold_name)
+def finetune_fold(fold_name, fold_idx, group_name, train_df, val_df, args, tokenizer):
+    """Fine-tune model for one fold/group and return evaluation metrics."""
+    fold_out = os.path.join(args.output_dir, fold_name, group_name)
     os.makedirs(fold_out, exist_ok=True)
 
     print(f"\n{'=' * 60}")
-    print(f"FOLD {fold_idx} ({fold_name})")
+    print(f"FOLD {fold_idx} ({fold_name}) — GROUP {group_name}")
     print(f"  Train: {len(train_df)} samples  "
           f"| virulent={int((train_df['label']==1).sum())} "
           f"| temperate={int((train_df['label']==0).sum())}")
@@ -448,27 +456,29 @@ def main():
     tokenizer = BertTokenizer.from_pretrained(args.config_dir, do_basic_tokenize=False)
 
     # ---- K-Fold fine-tuning ----
-    print(f"\n[4] Starting K-Fold fine-tuning ({len(fold_dirs)} folds)...")
+    print(f"\n[4] Starting K-Fold fine-tuning ({len(fold_dirs)} folds, per-group)...")
     all_metrics = []
 
     for fold_idx, fold_dir in enumerate(fold_dirs):
         print(f"\n{'#' * 60}")
         print(f"  Processing {fold_dir.name} ({fold_idx + 1}/{len(fold_dirs)})...")
 
-        train_df, val_df = build_fold_dataframes(fold_dir, label_map, genome2text)
+        groups = build_fold_dataframes(fold_dir, label_map, genome2text)
 
-        if len(train_df) == 0:
-            print(f"  [ERROR] No training samples for {fold_dir.name} — skipping fold")
-            continue
-        if len(val_df) == 0:
-            print(f"  [ERROR] No validation samples for {fold_dir.name} — skipping fold")
-            continue
+        for group_name, (train_df, val_df) in sorted(groups.items()):
+            if len(train_df) == 0:
+                print(f"  [ERROR] No training samples for {fold_dir.name}/{group_name} — skipping")
+                continue
+            if len(val_df) == 0:
+                print(f"  [ERROR] No validation samples for {fold_dir.name}/{group_name} — skipping")
+                continue
 
-        metrics = finetune_fold(
-            fold_dir.name, fold_idx, train_df, val_df, args, tokenizer
-        )
-        metrics["fold"] = fold_dir.name
-        all_metrics.append(metrics)
+            metrics = finetune_fold(
+                fold_dir.name, fold_idx, group_name, train_df, val_df, args, tokenizer
+            )
+            metrics["fold"] = fold_dir.name
+            metrics["group"] = group_name
+            all_metrics.append(metrics)
 
     if not all_metrics:
         print("\n[ERROR] No folds were successfully trained. Check your data directory.")
@@ -478,10 +488,11 @@ def main():
     print(f"\n{'=' * 60}")
     print("K-FOLD CROSS-VALIDATION SUMMARY")
     print(f"{'=' * 60}")
-    print(f"{'Fold':<15} {'Virulent':>10} {'Temperate':>11} {'Overall':>9}")
-    print(f"{'-' * 48}")
+    print(f"{'Fold/Group':<30} {'Virulent':>10} {'Temperate':>11} {'Overall':>9}")
+    print(f"{'-' * 63}")
     for m in all_metrics:
-        print(f"{m['fold']:<15} {m['virulent_acc']:>10.4f} "
+        key = f"{m['fold']}/{m['group']}"
+        print(f"{key:<30} {m['virulent_acc']:>10.4f} "
               f"{m['temperate_acc']:>11.4f} {m['overall_acc']:>9.4f}")
     print(f"{'-' * 48}")
 
@@ -489,9 +500,9 @@ def main():
     temp_arr    = np.array([m["temperate_acc"] for m in all_metrics])
     overall_arr = np.array([m["overall_acc"]   for m in all_metrics])
 
-    print(f"{'Mean':<15} {viru_arr.mean():>10.4f} "
+    print(f"{'Mean':<30} {viru_arr.mean():>10.4f} "
           f"{temp_arr.mean():>11.4f} {overall_arr.mean():>9.4f}")
-    print(f"{'Std':<15} {viru_arr.std():>10.4f} "
+    print(f"{'Std':<30} {viru_arr.std():>10.4f} "
           f"{temp_arr.std():>11.4f} {overall_arr.std():>9.4f}")
 
     summary = {
