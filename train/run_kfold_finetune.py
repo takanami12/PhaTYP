@@ -356,7 +356,6 @@ def finetune_fold(fold_name, fold_idx, train_df, val_df, args, tokenizer):
         load_best_model_at_end=True,
         metric_for_best_model="overall_acc",
         greater_is_better=True,
-        logging_dir=os.path.join(fold_out, "logs"),
         logging_steps=50,
         report_to="none",          # set to "tensorboard" if you want TensorBoard
     )
@@ -366,7 +365,7 @@ def finetune_fold(fold_name, fold_idx, train_df, val_df, args, tokenizer):
         args=training_args,
         train_dataset=tok_data["train"],
         eval_dataset=tok_data["test"],
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
     )
