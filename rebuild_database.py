@@ -375,7 +375,7 @@ def update_database(phatyp_dir, workdir, new_proteins_faa,
     new_rows = []
     for protein_id, pc in all_new_protein2pc.items():
         contig_id = protein2contig.get(protein_id, "")
-        new_rows.append(f"{protein_id},{contig_id},,{pc}\n")
+        new_rows.append(f"{protein_id},{contig_id},hypothetical protein,{pc}\n")
 
     print(f"  Appending {len(new_rows)} new protein entries to proteins.csv")
     with open(proteins_csv_path, "a") as f:
