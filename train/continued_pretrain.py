@@ -116,6 +116,20 @@ print(f"Model parameters: {model.num_parameters():,}")
 # ---------------------------------------------------------------------------
 # Datasets
 # ---------------------------------------------------------------------------
+# Peek at raw training lines before loading dataset
+with open(inputs.train, encoding="utf-8") as _f:
+    _raw_lines = [l.rstrip("\n") for l in _f][:3]
+print("[DIAG] First 3 raw lines from train.txt:")
+for _ln in _raw_lines:
+    print(f"  repr: {repr(_ln[:120])}")
+
+# Also check tokenizer on a sample line
+if _raw_lines:
+    _sample_ids = tokenizer.encode(_raw_lines[0].strip(), add_special_tokens=True)
+    print(f"[DIAG] Tokenized first line → {_sample_ids[:20]} (len={len(_sample_ids)})")
+    _sample_toks = tokenizer.convert_ids_to_tokens(_sample_ids[:10])
+    print(f"[DIAG] Converted back      → {_sample_toks}")
+
 data_train = LineByLineDataset(tokenizer, inputs.train, SENTENCE_LEN)
 data_val   = LineByLineDataset(tokenizer, inputs.val,   SENTENCE_LEN)
 print(f"Train sentences: {len(data_train)} | Val sentences: {len(data_val)}")
