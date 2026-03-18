@@ -48,7 +48,7 @@ data = datasets.DatasetDict({"train": train, "test": test})
 
 tokenized_data= data.map(preprocess_function, batched=True)
 data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
-model = AutoModelForSequenceClassification.from_pretrained("log", num_labels=2)
+model = AutoModelForSequenceClassification.from_pretrained("log_dapt", num_labels=2)
 
 
 training_args = TrainingArguments(
