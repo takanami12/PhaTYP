@@ -30,14 +30,14 @@ USAGE:
   python train/run_kfold_finetune.py \
       --data_dir  /path/to/data \
       --label_csv /path/to/labels.csv \
-      --pretrained_model train/log \
+      --pretrained_model train/log_dapt \
       --output_dir kfold_results
 
   # Multi-GPU (e.g., 4 GPUs):
   torchrun --nproc_per_node=4 train/run_kfold_finetune.py \
       --data_dir  /path/to/data \
       --label_csv /path/to/labels.csv \
-      --pretrained_model train/log \
+      --pretrained_model train/log_dapt \
       --output_dir kfold_results
 """
 
@@ -91,8 +91,8 @@ def parse_args():
              "(label: 1=virulent, 0=temperate)",
     )
     parser.add_argument(
-        "--pretrained_model", default="train/log",
-        help="Pretrained PhaTYP model directory (output of pretrain.py). "
+        "--pretrained_model", default="train/log_dapt",
+        help="Pretrained PhaTYP model directory (output of continued_pretrain.py). "
              "Must be run from PhaTYP root directory.",
     )
     parser.add_argument(
