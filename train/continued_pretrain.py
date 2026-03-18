@@ -16,16 +16,35 @@ After this script completes, run fine-tuning with:
 """
 
 import argparse
-import json
 
+import torch
+from torch.utils.data import Dataset
 from transformers import (
     BertTokenizer,
     BertForMaskedLM,
-    LineByLineTextDataset,
     DataCollatorForLanguageModeling,
     Trainer,
     TrainingArguments,
 )
+
+
+class LineByLineDataset(Dataset):
+    """Replacement for the removed LineByLineTextDataset."""
+    def __init__(self, tokenizer, file_path, block_size):
+        with open(file_path, encoding="utf-8") as f:
+            lines = [l.strip() for l in f if l.strip()]
+        self.examples = tokenizer(
+            lines,
+            max_length=block_size,
+            truncation=True,
+            padding=False,
+        )["input_ids"]
+
+    def __len__(self):
+        return len(self.examples)
+
+    def __getitem__(self, i):
+        return {"input_ids": torch.tensor(self.examples[i], dtype=torch.long)}
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -82,16 +101,8 @@ print(f"Model parameters: {model.num_parameters():,}")
 # ---------------------------------------------------------------------------
 # Datasets
 # ---------------------------------------------------------------------------
-data_train = LineByLineTextDataset(
-    tokenizer=tokenizer,
-    file_path=inputs.train,
-    block_size=SENTENCE_LEN,
-)
-data_val = LineByLineTextDataset(
-    tokenizer=tokenizer,
-    file_path=inputs.val,
-    block_size=SENTENCE_LEN,
-)
+data_train = LineByLineDataset(tokenizer, inputs.train, SENTENCE_LEN)
+data_val   = LineByLineDataset(tokenizer, inputs.val,   SENTENCE_LEN)
 print(f"Train sentences: {len(data_train)} | Val sentences: {len(data_val)}")
 
 # ---------------------------------------------------------------------------
