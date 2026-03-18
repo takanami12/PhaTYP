@@ -95,8 +95,11 @@ def parse_args():
         help="Pretrained PhaTYP model directory (output of continued_pretrain.py). "
              "Must be run from PhaTYP root directory.",
     )
+    # Default: parent of this script (train/../ == PhaTYP root)
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+    _default_phatyp_dir = os.path.dirname(_script_dir)
     parser.add_argument(
-        "--config_dir", default="config",
+        "--config_dir", default=os.path.join(_default_phatyp_dir, "config"),
         help="BERT config/tokenizer directory (PhaTYP root/config)",
     )
     parser.add_argument(
@@ -104,8 +107,9 @@ def parse_args():
         help="Output directory for models, logs, and results",
     )
     parser.add_argument(
-        "--phatyp_dir", default=".",
-        help="PhaTYP root directory (contains preprocessing.py and database/)",
+        "--phatyp_dir", default=_default_phatyp_dir,
+        help="PhaTYP root directory (contains preprocessing.py and database/). "
+             "Default: parent directory of this script.",
     )
     parser.add_argument(
         "--num_epochs", type=int, default=10,
@@ -211,8 +215,23 @@ def run_preprocessing(fasta_files, phatyp_dir, midfolder, min_len, threads):
     ]
     print(f"  Running: {' '.join(cmd)}")
     log_path = os.path.join(midfolder, "preprocessing.log")
-    with open(log_path, "w") as log_f:
-        subprocess.run(cmd, check=True, cwd=phatyp_dir, stdout=log_f, stderr=log_f)
+    try:
+        with open(log_path, "w") as log_f:
+            subprocess.run(cmd, check=True, cwd=phatyp_dir, stdout=log_f, stderr=log_f)
+    except subprocess.CalledProcessError as e:
+        # Print the last 50 lines of the log so the user can diagnose the error
+        print(f"\n[ERROR] preprocessing.py failed with exit code {e.returncode}")
+        print(f"  Log file: {log_path}")
+        print("  --- Last 50 lines of preprocessing log ---")
+        try:
+            with open(log_path) as _lf:
+                tail = _lf.readlines()
+            for line in tail[-50:]:
+                print("  " + line, end="")
+        except Exception:
+            print("  (could not read log file)")
+        print("  --- End of log ---\n")
+        raise
     print(f"  Preprocessing log saved to: {log_path}")
 
     return _load_features(midfolder)
