@@ -116,7 +116,6 @@ data_collator = DataCollatorForLanguageModeling(
 
 training_args = TrainingArguments(
     output_dir=OUTPUT_DIR,
-    overwrite_output_dir=False,
     do_train=True,
     do_eval=True,
     max_steps=inputs.max_steps,
