@@ -96,6 +96,21 @@ if old_vocab_size != new_vocab_size:
 else:
     print("Vocab size unchanged — no embedding resize needed.")
 
+# The original checkpoint is a classification model; the MLM head is absent and
+# randomly initialised, which produces huge logits and NaN loss immediately.
+# Reset the MLM head to safe starting values before training.
+import torch.nn as nn
+pred = model.cls.predictions
+nn.init.normal_(pred.transform.dense.weight, std=0.02)
+nn.init.zeros_(pred.transform.dense.bias)
+pred.transform.LayerNorm.weight.data.fill_(1.0)
+pred.transform.LayerNorm.bias.data.zero_()
+pred.bias.data.zero_()
+pred.decoder.bias.data.zero_()
+# Re-tie decoder weights to the embedding matrix (required after resize)
+model.tie_weights()
+print("MLM head re-initialised and weights tied.")
+
 print(f"Model parameters: {model.num_parameters():,}")
 
 # ---------------------------------------------------------------------------
@@ -131,6 +146,7 @@ training_args = TrainingArguments(
     warmup_steps=1000,
     fp16=False,
     max_grad_norm=1.0,
+    logging_steps=50,
     save_steps=2000,
     save_total_limit=5,
 )
