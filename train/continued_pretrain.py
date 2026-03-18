@@ -121,13 +121,23 @@ data_val   = LineByLineDataset(tokenizer, inputs.val,   SENTENCE_LEN)
 print(f"Train sentences: {len(data_train)} | Val sentences: {len(data_val)}")
 
 # ---------------------------------------------------------------------------
-# Training
+# Diagnostic: verify masking works before starting full training
 # ---------------------------------------------------------------------------
 data_collator = DataCollatorForLanguageModeling(
     tokenizer=tokenizer,
     mlm=True,
     mlm_probability=0.15,
 )
+
+sample_batch = [data_train[i] for i in range(min(8, len(data_train)))]
+dbatch = data_collator(sample_batch)
+n_masked  = (dbatch["labels"] != -100).sum().item()
+n_total   = (dbatch["input_ids"] != tokenizer.pad_token_id).sum().item()
+print(f"[DIAG] input_ids shape : {dbatch['input_ids'].shape}")
+print(f"[DIAG] unique token IDs: {dbatch['input_ids'].unique()[:10].tolist()} ...")
+print(f"[DIAG] special_ids     : {sorted(tokenizer.all_special_ids)}")
+print(f"[DIAG] masked tokens   : {n_masked} / {n_total} real tokens")
+print(f"[DIAG] labels sample   : {dbatch['labels'][0].tolist()}")
 
 training_args = TrainingArguments(
     output_dir=OUTPUT_DIR,
