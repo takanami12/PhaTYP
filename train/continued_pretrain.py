@@ -126,7 +126,7 @@ print(f"Train sentences: {len(data_train)} | Val sentences: {len(data_val)}")
 data_collator = DataCollatorForLanguageModeling(
     tokenizer=tokenizer,
     mlm=True,
-    mlm_probability=0.025,
+    mlm_probability=0.15,
 )
 
 training_args = TrainingArguments(
