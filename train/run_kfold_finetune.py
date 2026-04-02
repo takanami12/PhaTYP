@@ -158,6 +158,17 @@ def get_genome_ids(fasta_path: Path):
     return [r.id for r in SeqIO.parse(str(fasta_path), "fasta")]
 
 
+def parse_genome_id_from_description(record_id: str, description: str) -> str:
+    """Extract genome_id from FASTA description field.
+
+    Header format: >NC_003315__contig_29 label=0 genome_id=NC_003315
+    Falls back to record_id if genome_id= tag is not found.
+    """
+    import re
+    m = re.search(r"genome_id=(\S+)", description)
+    return m.group(1) if m else record_id
+
+
 # ---------------------------------------------------------------------------
 # Step 1 – Preprocessing (run once for all unique genomes)
 # ---------------------------------------------------------------------------
@@ -259,18 +270,22 @@ def build_fold_dataframes(fold_dir: Path, label_map: dict, genome2text: dict):
             print(f"  [WARN] Cannot determine split for '{fasta_path.name}' — skipping")
             continue
 
-        for genome_id in get_genome_ids(fasta_path):
-            if genome_id not in genome2text:
-                missing_feat.append(genome_id)
+        for seq_record in SeqIO.parse(str(fasta_path), "fasta"):
+            contig_id = seq_record.id   # e.g. NC_003315__contig_29  → key in genome2text
+            genome_id = parse_genome_id_from_description(contig_id, seq_record.description)
+            # e.g. NC_003315  → key in label_map
+
+            if contig_id not in genome2text:
+                missing_feat.append(contig_id)
                 continue
             if genome_id not in label_map:
                 missing_label.append(genome_id)
                 continue
-            record = {"label": label_map[genome_id], "text": genome2text[genome_id]}
+            row = {"label": label_map[genome_id], "text": genome2text[contig_id]}
             if split == "train":
-                train_records.append(record)
+                train_records.append(row)
             else:
-                val_records.append(record)
+                val_records.append(row)
 
     if missing_feat:
         print(f"  [WARN] {len(missing_feat)} genomes skipped (no features — likely too short)")
